@@ -8,7 +8,6 @@ To Do:
 3. error handling
 4. if bad data in request (HTTP 400), don't partially create host during POST / maybe some pre-check validation?
 5. move credentials out of DbConnect class
-6.
 
 Fixed:
 check if host exists before hitting /hosts/<hostname> and error appropriately
@@ -16,14 +15,38 @@ Fix querying old/invalid host/id error
 Fix deleting old/invalid host/id error
 Add check to set_host_serial_num to verify for existence of serial_num
 Add to comment functionality
+Removed reqparse - slated for deprecation. Using request.form instead.
 '''
 
 from flask import Flask, request, make_response, jsonify, abort
-from flask_restful import Resource, Api, reqparse
+from flask_restful import Resource, Api
 from sqlalchemy import create_engine
 from flask_httpauth import HTTPBasicAuth
-from json import dumps
+import json
 from error_handling import *
+
+app = Flask(__name__)
+api = Api(app, catch_all_404s=True, errors=errors)
+auth = HTTPBasicAuth()
+
+@auth.get_password
+def get_password(username):
+    if username == 'miguel':
+        return 'python'
+    return None
+
+@auth.error_handler
+def unauthorized():
+    # return 403 instead of 401 to prevent browsers from displaying the default
+    # auth dialog
+    return make_response(jsonify({'message': 'Unauthorized access'}), 403)
+
+def is_number(s):
+    try:
+        float(s)
+        return True
+    except ValueError:
+        return False
 
 class Dbconnect:
     def __init__(self):
@@ -32,8 +55,8 @@ class Dbconnect:
         '''
         rtables_host = 'racktables.dev.tsi.lan'
         rtables_db = 'racktables_db'
-        rtables_db_user = 'REDACTED'
-        rtables_db_pass = 'REDACTED'
+        rtables_db_user = 'admin'
+        rtables_db_pass = 'sZ#.f,8K$n'
         self.uri = 'mysql://%s:%s@%s/%s' % (rtables_db_user,rtables_db_pass, rtables_host, rtables_db)
         self.conn = None
 
@@ -66,6 +89,7 @@ class Hosts(Dbconnect, Resource):
         return jsonify({'hosts': [i['name'] for i in result]})
 
 class Host(Dbconnect, Resource):
+
     def add_object(self, name, objtype_id=4):
         '''
         Create object
@@ -220,46 +244,6 @@ class Host(Dbconnect, Resource):
         else:
             self.conn.execute("update AttributeValue set string_value=%s where attr_id=1 and object_id=%s", (serial_num, hostid))
 
-    # def set_object_tags(self, hostid, tags, replace=False):
-    #     '''
-    #     Update the object tags for a host.
-    #     '''
-    #     tags_added = []
-    #     tags_ignored = []
-    #     tags_exist = []
-    #     db = pymysql.connect(host=self.rtables_host, user=self.rtables_db_user, passwd=self.rtables_db_pass, db=self.rtables_db)
-    #     cur = db.cursor()
-    #     cur.execute("""select id, tag from TagTree""")
-    #     result = cur.fetchall()
-    #     d = {key: value for (key,value) in result}
-
-    #     if replace:
-    #     # delete all current tags
-    #         cur.execute("""delete from TagStorage where entity_id=%s""", hostid)
-    #     for tag in tags:
-    #         if tag in d.values():
-    #             # get tagid
-    #             tagid = [i for i, t in d.items() if t == tag][0]
-    #             tag_exists = False
-    #             try:
-    #                 # check if tag already exists
-    #                 cur.execute("""select * from TagStorage where entity_id=%s and tag_id=%s""", (hostid, str(tagid)))
-    #                 tag_exists = cur.fetchone()[0]
-    #             except TypeError:
-    #                 pass
-
-    #             if tag_exists == False:
-    #                 now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    #                 cur.execute("""insert into TagStorage (entity_realm, entity_id, tag_id, tag_is_assignable, user, date) values ('object',%s,%s,'yes',%s,%s)""", (hostid, tagid, self.username, now))
-    #                 tags_added.append(tag)
-    #             else:
-    #                 tags_exist.append(tag)
-    #         else:
-    #             tags_ignored.append(tag)
-    #     db.commit()
-    #     cur.close()
-    #     return tags_added, tags_ignored, tags_exist
-
     def get_domain_id(self, domain):
         '''
         Retrieves the racktables id/name for a given domain or None if not found
@@ -328,27 +312,28 @@ class Host(Dbconnect, Resource):
         '''
         function to process args if available
         '''
-        if args['status']:
+        keys = args.keys()
+        if 'status' in keys:
             self.set_host_status(hostid, args['status'])
-        if args['serial_no']:
+        if 'serial_no' in keys:
             self.set_host_serial_num(hostid, args['serial_no'])
-        if args['domain']:
+        if 'domain' in keys:
             self.set_host_domain(hostid, args['domain'])
-        if args['comment']:
+        if 'comment' in keys:
             self.add_comments(hostid, args['comment'])
-        if args['tags']:
+        if 'tags' in keys:
             pass
-        if args['hw_type']:
+        if 'hw_type' in keys:
             pass
-        if args['contact']:
+        if 'contact' in keys:
             pass
-        if args['os']:
+        if 'os' in keys:
             pass
-        if args['datacenter']:
+        if 'datacenter' in keys:
             pass
-        if args['cabinet']:
+        if 'cabinet' in keys:
             pass
-        if args['rack_loc']:
+        if 'rack_loc' in keys:
             pass
 
     def put(self, hostname):
@@ -358,7 +343,7 @@ class Host(Dbconnect, Resource):
         hostid = self.get_id(hostname)
         if hostid == None:
          raise ResourceDoesNotExist
-        args = parser.parse_args()
+        args = request.form
         self.parse_args(hostid, args)
         newhost = self.get(hostname)
         return newhost
@@ -369,7 +354,7 @@ class Host(Dbconnect, Resource):
             raise ResourceAlreadyExists
         self.add_object(hostname)
         newhostid = self.get_id(hostname)
-        args = parser.parse_args()
+        args = request.form
         self.parse_args(newhostid, args)
         newhost = self.get(hostname)
         return newhost
@@ -399,49 +384,9 @@ class Comments(Host):
         result = self.sql_query(sql)
         return jsonify(result[0])
 
-app = Flask(__name__)
-api = Api(app, catch_all_404s=True, errors=errors)
-
 api.add_resource(Hosts, '/hosts')
 api.add_resource(Host, '/hosts/<string:hostname>')
 api.add_resource(Comments, '/hosts/<string:hostname>/comments')
-
-auth = HTTPBasicAuth()
-
-parser = reqparse.RequestParser()
-parser.add_argument('status')
-parser.add_argument('serial_no')
-parser.add_argument('domain')
-parser.add_argument('tags')
-parser.add_argument('hw_type')
-parser.add_argument('contact')
-parser.add_argument('os')
-parser.add_argument('datacenter')
-parser.add_argument('cabinet')
-parser.add_argument('rack_loc')
-parser.add_argument('comment')
-
-# @auth.error_handler
-# def unauthorized():
-#     # return 403 instead of 401 to prevent browsers from displaying the default
-#     # auth dialog
-#     return make_response(jsonify({'error': 'Unauthorized access'}), 403)
-
-# @app.errorhandler(400)
-# def bad_request(error):
-#     return make_response(jsonify({'error': 'Bad request'}), 400)
-
-
-# @app.errorhandler(404)
-# def not_found(error):
-#     return make_response(jsonify({'error': 'Not found'}), 404)
-
-def is_number(s):
-    try:
-        float(s)
-        return True
-    except ValueError:
-        return False
 
 if __name__ == '__main__':
     # app.run(host='0.0.0.0', debug=True)
