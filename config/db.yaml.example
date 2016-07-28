@@ -1,0 +1,6 @@
+---
+production:
+  host: 'hostname.domain.com'
+  db: 'database1'
+  username: 'readonlyuser'
+  password: 'readonlypass'
