@@ -1,45 +1,8 @@
-'''
-jbarnett
-7/18/2016
+# Database connection class imports
+import pymysql
+from flask import abort
 
-To Do:
-1. optional specify object type id in query
-2. close connections properly if needed? (self.conn.close())
-3. error handling
-4. if bad data in request (HTTP 400), don't partially create host during POST / maybe some pre-check validation?
-5. move credentials out of DbConnect class
 
-Fixed:
-check if host exists before hitting /hosts/<hostname> and error appropriately
-Fix querying old/invalid host/id error
-Fix deleting old/invalid host/id error
-Add check to set_host_serial_num to verify for existence of serial_num
-Add to comment functionality
-Removed reqparse - slated for deprecation. Using request.form instead.
-'''
-
-from flask import Flask, request, make_response, jsonify, abort
-from flask_restful import Resource, Api
-from sqlalchemy import create_engine
-from flask_httpauth import HTTPBasicAuth
-import json
-from error_handling import *
-
-app = Flask(__name__)
-api = Api(app, catch_all_404s=True, errors=errors)
-auth = HTTPBasicAuth()
-
-@auth.get_password
-def get_password(username):
-    if username == 'miguel':
-        return 'python'
-    return None
-
-@auth.error_handler
-def unauthorized():
-    # return 403 instead of 401 to prevent browsers from displaying the default
-    # auth dialog
-    return make_response(jsonify({'message': 'Unauthorized access'}), 403)
 
 def is_number(s):
     try:
@@ -48,55 +11,50 @@ def is_number(s):
     except ValueError:
         return False
 
-class Dbconnect:
-    def __init__(self):
+class RacktablesDB:
+    def __init__(self, host, username, password, db):
         '''
         init
         '''
-        rtables_host = 'racktables.dev.tsi.lan'
-        rtables_db = 'racktables_db'
-        rtables_db_user = 'admin'
-        rtables_db_pass = 'sZ#.f,8K$n'
-        self.uri = 'mysql://%s:%s@%s/%s' % (rtables_db_user,rtables_db_pass, rtables_host, rtables_db)
+        self.host = host
+        self.username = username
+        self.password = password
+        self.db = db
         self.conn = None
 
-    def _connect(self):
+    def connect(self):
         '''
         Connect to Racktables DB
         '''
         if not self.conn:
-            e = create_engine(self.uri)
-            self.conn = e.connect()
+            self.conn = pymysql.connect(host=self.host, user=self.username, passwd=self.password, db=self.db)
+            self.cursor = self.conn.cursor()
+
+    def close(self):
+        if self.conn:
+            self.conn.close()
 
     def sql_query(self, sql):
         '''
         sql query wrapper
         '''
         #Perform query and return JSON data
-        self._connect()
+        cursor = self.conn.cursor(pymysql.cursors.DictCursor)
         if type(sql) == list:
             for q in sql:
-                result = self.conn.execute(q)
+                cursor.execute(q)
         else:
-            result = self.conn.execute(sql)
-        sqldict = [dict(zip(tuple (result.keys()) ,i)) for i in result]
-        return sqldict
-
-class Hosts(Dbconnect, Resource):
-    def get(self):
-        sql = "select * from Object"
-        result = self.sql_query(sql)
-        return jsonify({'hosts': [i['name'] for i in result]})
-
-class Host(Dbconnect, Resource):
+            cursor.execute(sql)
+        result = cursor.fetchall()
+        return result
 
     def add_object(self, name, objtype_id=4):
         '''
         Create object
         '''
-        self._connect()
         sql = "insert into Object (id, name, label, objtype_id, asset_no, has_problems, comment) values (NULL,'%s',NULL,%s,NULL,'no',NULL)" % (name, objtype_id)
-        self.conn.execute(sql)
+        self.cursor.execute(sql)
+        self.conn.commit()
 
     def get(self, hostname):
         '''
@@ -104,7 +62,7 @@ class Host(Dbconnect, Resource):
         '''
         hostid = self.get_id(hostname)
         if hostid == None:
-            raise ResourceDoesNotExist
+            abort(410)
         sql = "select id, name from Object where id='%s'" % hostid
         query = self.sql_query(sql)
         status = self.get_host_status(hostid)
@@ -119,9 +77,8 @@ class Host(Dbconnect, Resource):
         result['data'][0]['os'] = os_type
         result['data'][0]['domain'] = domain
         # result['status'] = 200
-        out = jsonify(result)
         # out.status_code = 200
-        return out
+        return result
 
     def get_id(self, hostname):
         '''
@@ -153,7 +110,7 @@ class Host(Dbconnect, Resource):
     def get_host_hwtype(self, hostid):
         ''' Returns hardware type for a specific hostname/id
         '''
-        # query = self.conn.execute("select distinct id,name, dict_value hw_type from Object t1 left join AttributeValue t2 on t1.id=t2.object_id left join TagStorage t3 on t1.id=t3.entity_id left join Dictionary t4 on t2.uint_value=t4.dict_key where t2.attr_id=2 and t1.id='%s'" % hostname)
+        # query = self.cursor.execute("select distinct id,name, dict_value hw_type from Object t1 left join AttributeValue t2 on t1.id=t2.object_id left join TagStorage t3 on t1.id=t3.entity_id left join Dictionary t4 on t2.uint_value=t4.dict_key where t2.attr_id=2 and t1.id='%s'" % hostname)
         sql = "select distinct id,name, dict_value hw_type from Object t1 left join AttributeValue t2 on t1.id=t2.object_id left join TagStorage t3 on t1.id=t3.entity_id left join Dictionary t4 on t2.uint_value=t4.dict_key where t2.attr_id=2 and t1.id='%s'" % hostid
         try:
             result = self.sql_query(sql)
@@ -214,19 +171,19 @@ class Host(Dbconnect, Resource):
         Sets the Status for a particular hostname.
         '''
         # Get Status ID
-        self._connect()
         status_id = self.get_status_id(statusname)
         if status_id == None:
-            raise ResourceDoesNotExist
+            abort(410)
         # Get status: if None insert record, otherwise update existing
         try:
             status_exists = self.get_host_status(hostid)
         except TypeError:
             pass
         if status_exists == None:
-            self.conn.execute("insert into AttributeValue (object_id, object_tid, attr_id, string_value, uint_value, float_value) values (%s,4,10005,NULL,%s,NULL) on duplicate key update object_id=object_id""", (hostid, status_id))
+            self.cursor.execute("insert into AttributeValue (object_id, object_tid, attr_id, string_value, uint_value, float_value) values (%s,4,10005,NULL,%s,NULL) on duplicate key update object_id=object_id""", (hostid, status_id))
         else:
-            self.conn.execute("update AttributeValue set uint_value=%s where attr_id=10005 and object_id=%s""", (status_id, hostid))
+            self.cursor.execute("update AttributeValue set uint_value=%s where attr_id=10005 and object_id=%s""", (status_id, hostid))
+        self.conn.commit()
 
     def set_host_serial_num(self, hostid, serial_num):
         '''
@@ -234,15 +191,16 @@ class Host(Dbconnect, Resource):
         '''
         serial_exists = self.get_serial_num_exist(serial_num)
         if serial_exists:
-            raise ResourceAlreadyExists
+            abort(409)
         try:
             serial_exists = self.get_host_serial_num(hostid)
         except TypeError:
             serial_exists = None
         if serial_exists == None:
-            self.conn.execute("insert into AttributeValue (object_id, object_tid, attr_id, string_value, uint_value, float_value) values (%s,4,1,%s,NULL,NULL) on duplicate key update object_id=object_id", (hostid, serial_num))
+            self.cursor.execute("insert into AttributeValue (object_id, object_tid, attr_id, string_value, uint_value, float_value) values (%s,4,1,%s,NULL,NULL) on duplicate key update object_id=object_id", (hostid, serial_num))
         else:
-            self.conn.execute("update AttributeValue set string_value=%s where attr_id=1 and object_id=%s", (serial_num, hostid))
+            self.cursor.execute("update AttributeValue set string_value=%s where attr_id=1 and object_id=%s", (serial_num, hostid))
+        self.conn.commit()
 
     def get_domain_id(self, domain):
         '''
@@ -276,15 +234,16 @@ class Host(Dbconnect, Resource):
         '''
         domain_id = self.get_domain_id(domain)
         if domain_id == None:
-            raise BadRequest
+            abort(410)
         try:
             domain_already_configured = self.get_host_domain(hostid)
         except TypeError:
             domain_already_configured = None
         if domain_already_configured:
-            self.conn.execute("update AttributeValue set uint_value=%s where attr_id=10002 and object_id=%s", (domain_id, hostid))
+            self.cursor.execute("update AttributeValue set uint_value=%s where attr_id=10002 and object_id=%s", (domain_id, hostid))
         else:
-            self.conn.execute("insert into AttributeValue (object_id, object_tid, attr_id, string_value, uint_value, float_value) values (%s,4,10002,NULL,%s,NULL) on duplicate key update object_id=object_id", (hostid, domain_id))
+            self.cursor.execute("insert into AttributeValue (object_id, object_tid, attr_id, string_value, uint_value, float_value) values (%s,4,10002,NULL,%s,NULL) on duplicate key update object_id=object_id", (hostid, domain_id))
+        self.conn.commit()
 
     def add_comments(self, hostid, comments, overwrite=False):
         '''
@@ -305,7 +264,8 @@ class Host(Dbconnect, Resource):
             new_sql = "update RackObject set comment='%s' where id=%s" % (appended_comment, hostid)
         else:
             new_sql = "update RackObject set comment='%s' where id=%s" % (comments, hostid)
-        self.conn.execute(new_sql)
+        self.cursor.execute(new_sql)
+        self.conn.commit()
 
 
     def parse_args(self, hostid, args):
@@ -336,26 +296,23 @@ class Host(Dbconnect, Resource):
         if 'rack_loc' in keys:
             pass
 
-    def put(self, hostname):
+    def put(self, hostname, data):
         '''
         update a host
         '''
         hostid = self.get_id(hostname)
         if hostid == None:
-         raise ResourceDoesNotExist
-        args = request.form
-        self.parse_args(hostid, args)
+         abort(410)
+        #args = request.form
+        self.parse_args(hostid, data)
         newhost = self.get(hostname)
         return newhost
 
-    def post(self, hostname):
+    def post(self, hostname, data):
         hostid = self.get_id(hostname)
-        if hostid != None:
-            raise ResourceAlreadyExists
         self.add_object(hostname)
         newhostid = self.get_id(hostname)
-        args = request.form
-        self.parse_args(newhostid, args)
+        self.parse_args(newhostid, data)
         newhost = self.get(hostname)
         return newhost
 
@@ -363,31 +320,25 @@ class Host(Dbconnect, Resource):
         '''
         delete a host by
         '''
-        self._connect()
         hostid = self.get_id(hostname)
         if hostid == None:
-            raise ResourceDoesNotExist
+            abort(410)
         else:
             sql = ["delete from Object where id='%s'" % hostid,
                    "delete from TagStorage where entity_id='%s'" % hostid,
                    "delete from ObjectLog where object_id='%s'" % hostid,
                    "delete from ObjectHistory where id='%s'" % hostid]
             for q in sql:
-                self.conn.execute(q)
+                self.cursor.execute(q)
+            self.conn.commit()
             result = {'data': [{'result': True}]}
-            return jsonify(result)
+            return result
 
-class Comments(Host):
-    def get(self, hostname):
+    def get_comments(self, hostname):
+        '''
+        get host comments
+        '''
         hostid = self.get_id(hostname)
         sql = "select comment from RackObject where id=%s" % hostid
         result = self.sql_query(sql)
-        return jsonify(result[0])
-
-api.add_resource(Hosts, '/hosts')
-api.add_resource(Host, '/hosts/<string:hostname>')
-api.add_resource(Comments, '/hosts/<string:hostname>/comments')
-
-if __name__ == '__main__':
-    # app.run(host='0.0.0.0', debug=True)
-    app.run(debug=True)
+        return result[0]
