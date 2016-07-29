@@ -16,16 +16,16 @@ with open('config/db.yaml', 'r') as f:
     db = config['production']['db']
 
 # Define the blueprint: 'api'
-mod = Blueprint('api', __name__, url_prefix='/hosts')
+hosts = Blueprint('hosts', __name__)
 
 # Create database connection session before request if not exist
-@mod.before_request
+@hosts.before_request
 def before_request():
     g.RacktablesDB = RacktablesDB(host, username, password, db)
     g.RacktablesDB.connect()
 
 # Close database connection session if not already closed
-@mod.teardown_request
+@hosts.teardown_request
 def teardown_request(exception):
     db = getattr(g, 'RacktablesDB', None)
     if db is not None:
@@ -42,30 +42,13 @@ def get_db():
         g.RacktablesDB.connect()
     return g.RacktablesDB
 
-@mod.errorhandler(400)
-def bad_request(error):
-    return make_response(jsonify({'message': 'The request contained invalid data. Please try again.', 'status': '400'}), 400)
-
-@mod.errorhandler(404)
-def not_found(error):
-    return make_response(jsonify({'message': 'The requested URL was not found on the server.  If you entered the URL manually please check your spelling and try again.', 'status': '404'}), 404)
-
-@mod.errorhandler(409)
-def bad_request(error):
-    return make_response(jsonify({'message': 'A resource with that name or ID already exists.', 'status': '409'}), 409)
-
-
-@mod.errorhandler(410)
-def not_found(error):
-    return make_response(jsonify({'message': 'A resource with that name cannot be found.', 'status': '410'}), 410)
-
-@mod.route('/', methods=['GET'], strict_slashes=False)
+@hosts.route('/', methods=['GET'], strict_slashes=False)
 def get():
     RacktablesDB = get_db()
     result = RacktablesDB.get_all_objects()
     return jsonify(result)
 
-@mod.route('/<string:hostname>', methods=['GET', 'PUT', 'POST', 'DELETE'], strict_slashes=False)
+@hosts.route('/<string:hostname>', methods=['GET', 'PUT', 'POST', 'DELETE'], strict_slashes=False)
 def run(hostname):
     RacktablesDB = get_db()
     if request.method == 'GET':
@@ -85,7 +68,7 @@ def run(hostname):
         result = RacktablesDB.delete(hostname)
         return jsonify(result)
 
-@mod.route('/<string:hostname>/comments', methods=['GET', 'PUT', 'POST', 'DELETE'])
+@hosts.route('/<string:hostname>/comments', methods=['GET', 'PUT', 'POST', 'DELETE'])
 def run1(hostname):
     RacktablesDB = get_db()
     if request.method == 'GET':
