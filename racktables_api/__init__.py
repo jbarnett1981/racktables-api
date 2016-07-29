@@ -2,7 +2,7 @@
 import json
 from flask import Flask, jsonify, make_response
 from flask_httpauth import HTTPBasicAuth
-from racktables_api.views import mod as apiv1
+from racktables_api.hosts.views import mod as apiv1
 
 # Define the WSGI application object
 app = Flask(__name__)
