@@ -8,12 +8,12 @@ hosts = Blueprint('hosts', __name__)
 
 
 @hosts.route('/', methods=['GET'], strict_slashes=False)
-def get():
+def get_hosts():
     result = g.RacktablesDB.get_all_objects()
     return jsonify(result)
 
 @hosts.route('/<string:hostname>', methods=['GET', 'PUT', 'POST', 'DELETE'], strict_slashes=False)
-def run(hostname):
+def run_host(hostname):
     if request.method == 'GET':
 
         result = g.RacktablesDB.get(hostname)

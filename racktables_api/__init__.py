@@ -5,6 +5,7 @@ from flask import Flask, jsonify, make_response, g
 from flask_httpauth import HTTPBasicAuth
 from racktables_api.main.views import main
 from racktables_api.hosts.views import hosts
+from racktables_api.comments.views import comments
 from racktables_api.status.views import status
 from racktables_api.database import is_number, RacktablesDB
 
@@ -65,4 +66,5 @@ def not_found(error):
 # Import a module / component using its blueprint handler variable
 app.register_blueprint(main, url_prefix='/')
 app.register_blueprint(hosts, url_prefix='/hosts')
-app.register_blueprint(status, url_prefix='/hosts/<string:hostname>')
+app.register_blueprint(comments, url_prefix='/hosts/<string:hostname>')
+app.register_blueprint(status, url_prefix='/status')
