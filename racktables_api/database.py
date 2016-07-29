@@ -68,12 +68,12 @@ class RacktablesDB:
         serial_no = self.get_host_serial_num(hostid)
         os_type = self.get_host_os(hostid)
         domain = self.get_host_domain(hostid)
-        result = {'data': query}
-        result['data'][0]['status'] = status
-        result['data'][0]['hwtype'] = hwtype
-        result['data'][0]['serial_no'] = serial_no
-        result['data'][0]['os'] = os_type
-        result['data'][0]['domain'] = domain
+        result = {'data': {'host': query}}
+        result['data']['host'][0]['status'] = status
+        result['data']['host'][0]['hwtype'] = hwtype
+        result['data']['host'][0]['serial_no'] = serial_no
+        result['data']['host'][0]['os'] = os_type
+        result['data']['host'][0]['domain'] = domain
         # result['status'] = 200
         # out.status_code = 200
         return result
@@ -84,7 +84,7 @@ class RacktablesDB:
         '''
         sql = "select * from Object"
         result = self.sql_query(sql)
-        return {'hosts': [i['name'] for i in result]}
+        return {'data': {'hosts': [i['name'] for i in result]}}
 
     def get_id(self, hostname):
         '''
@@ -309,7 +309,6 @@ class RacktablesDB:
         hostid = self.get_id(hostname)
         if hostid == None:
          abort(410)
-        #args = request.form
         self.parse_args(hostid, data)
         newhost = self.get(hostname)
         return newhost
