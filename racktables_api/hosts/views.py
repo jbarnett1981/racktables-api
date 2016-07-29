@@ -1,8 +1,8 @@
 # Import flask dependencies
-from flask import Blueprint, jsonify, g, request, make_response, abort
+from flask import Blueprint, jsonify, g, request
 
 
-# Define the blueprint: 'api'
+# Define the blueprint: 'hosts'
 hosts = Blueprint('hosts', __name__)
 
 
@@ -31,8 +31,8 @@ def run(hostname):
         result = g.RacktablesDB.delete(hostname)
         return jsonify(result)
 
-@hosts.route('/<string:hostname>/comments', methods=['GET', 'PUT', 'POST', 'DELETE'])
-def run1(hostname):
-    if request.method == 'GET':
-        result = g.RacktablesDB.get_comments(hostname)
-        return jsonify(result)
+# @hosts.route('/<string:hostname>/comments', methods=['GET', 'PUT', 'POST', 'DELETE'])
+# def run1(hostname):
+#     if request.method == 'GET':
+#         result = g.RacktablesDB.get_comments(hostname)
+#         return jsonify(result)
