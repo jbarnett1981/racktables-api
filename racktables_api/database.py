@@ -179,7 +179,7 @@ class RacktablesDB:
         # Get Status ID
         status_id = self.get_status_id(statusname)
         if status_id == None:
-            abort(410)
+            abort(400)
         # Get status: if None insert record, otherwise update existing
         try:
             status_exists = self.get_host_status(hostid)
@@ -308,13 +308,15 @@ class RacktablesDB:
         '''
         hostid = self.get_id(hostname)
         if hostid == None:
-         abort(410)
+            abort(410)
         self.parse_args(hostid, data)
         newhost = self.get(hostname)
         return newhost
 
     def post(self, hostname, data):
         hostid = self.get_id(hostname)
+        if hostid != None:
+            abort(409)
         self.add_object(hostname)
         newhostid = self.get_id(hostname)
         self.parse_args(newhostid, data)
