@@ -2,8 +2,6 @@
 import pymysql
 from flask import abort
 
-
-
 def is_number(s):
     try:
         float(s)
@@ -79,6 +77,14 @@ class RacktablesDB:
         # result['status'] = 200
         # out.status_code = 200
         return result
+
+    def get_all_objects(self):
+        '''
+        Return all objects
+        '''
+        sql = "select * from Object"
+        result = self.sql_query(sql)
+        return {'hosts': [i['name'] for i in result]}
 
     def get_id(self, hostname):
         '''

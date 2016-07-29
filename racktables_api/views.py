@@ -16,7 +16,7 @@ with open('config/db.yaml', 'r') as f:
     db = config['production']['db']
 
 # Define the blueprint: 'api'
-mod = Blueprint('api', __name__)
+mod = Blueprint('api', __name__, url_prefix='/hosts')
 
 # Create database connection session before request if not exist
 @mod.before_request
@@ -60,17 +60,12 @@ def not_found(error):
     return make_response(jsonify({'message': 'A resource with that name cannot be found.', 'status': '410'}), 410)
 
 @mod.route('/', methods=['GET'], strict_slashes=False)
-def index():
-    return jsonify({'custom message': 'blah'})
-
-@mod.route('/hosts', methods=['GET'], strict_slashes=False)
 def get():
     RacktablesDB = get_db()
-    sql = "select * from Object"
-    result = RacktablesDB.sql_query(sql)
-    return jsonify({'hosts': [i['name'] for i in result]})
+    result = RacktablesDB.get_all_objects()
+    return jsonify(result)
 
-@mod.route('/hosts/<string:hostname>', methods=['GET', 'PUT', 'POST', 'DELETE'], strict_slashes=False)
+@mod.route('/<string:hostname>', methods=['GET', 'PUT', 'POST', 'DELETE'], strict_slashes=False)
 def run(hostname):
     RacktablesDB = get_db()
     if request.method == 'GET':
@@ -79,24 +74,20 @@ def run(hostname):
         return jsonify(result)
 
     elif request.method == 'PUT':
-        # RacktablesDB = get_db()
         result = RacktablesDB.put(hostname, request.form)
         return jsonify(result)
 
     elif request.method == 'POST':
-        # RacktablesDB = get_db()
         result = RacktablesDB.post(hostname, request.form)
         return jsonify(result)
 
     elif request.method == 'DELETE':
-        # RacktablesDB = get_db()
         result = RacktablesDB.delete(hostname)
         return jsonify(result)
 
-@mod.route('/hosts/<string:hostname>/comments', methods=['GET', 'PUT', 'POST', 'DELETE'])
+@mod.route('/<string:hostname>/comments', methods=['GET', 'PUT', 'POST', 'DELETE'])
 def run1(hostname):
     RacktablesDB = get_db()
     if request.method == 'GET':
-        # RacktablesDB = get_db()
         result = RacktablesDB.get_comments(hostname)
         return jsonify(result)

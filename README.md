@@ -2,7 +2,7 @@ jbarnett
 7/18/2016
 
 To Do:
-1. optional specify object type id in query
+1. optional specify object type id in query / currently returning all objects
 2. if bad data in request (HTTP 400), don't partially create host during POST / maybe some pre-check validation?
 
 Fixed:
