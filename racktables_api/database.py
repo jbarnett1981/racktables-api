@@ -32,7 +32,7 @@ class RacktablesDB:
         if self.conn:
             self.conn.close()
 
-    def sql_query(self, sql):
+    def sql_query(self, sql, params=None):
         '''
         sql query wrapper
         '''
@@ -40,9 +40,9 @@ class RacktablesDB:
         cursor = self.conn.cursor(pymysql.cursors.DictCursor)
         if type(sql) == list:
             for q in sql:
-                cursor.execute(q)
+                cursor.execute(q, params)
         else:
-            cursor.execute(sql)
+            cursor.execute(sql, params)
         result = cursor.fetchall()
         return result
 
@@ -50,8 +50,8 @@ class RacktablesDB:
         '''
         Create object
         '''
-        sql = "insert into Object (id, name, label, objtype_id, asset_no, has_problems, comment) values (NULL,'%s',NULL,%s,NULL,'no',NULL)" % (name, objtype_id)
-        self.cursor.execute(sql)
+        sql = "insert into Object (id, name, label, objtype_id, asset_no, has_problems, comment) values (NULL,%s,NULL,%s,NULL,'no',NULL)"
+        self.cursor.execute(sql, (name, objtype_id))
         self.conn.commit()
 
     def get(self, hostname):
@@ -61,8 +61,8 @@ class RacktablesDB:
         hostid = self.get_id(hostname)
         if hostid == None:
             abort(410)
-        sql = "select id, name from Object where id='%s'" % hostid
-        query = self.sql_query(sql)
+        sql = "select id, name from Object where id=%s"
+        query = self.sql_query(sql, (hostid))
         status = self.get_host_status(hostid)
         hwtype = self.get_host_hwtype(hostid)
         serial_no = self.get_host_serial_num(hostid)
@@ -91,11 +91,11 @@ class RacktablesDB:
         Returns the racktables object id for a given hostname or returns the id if already provided
         '''
         if is_number(hostname):
-            sql = "select id from Object where id='%s'" % hostname
+            sql = "select id from Object where id=%s"
         else:
-            sql = "select id from Object where name='%s'" % hostname
+            sql = "select id from Object where name=%s"
         try:
-            result = self.sql_query(sql)
+            result = self.sql_query(sql, (hostname))
             return result[0]['id']
         except IndexError:
             #return "None" if host doesn't exist
@@ -105,9 +105,9 @@ class RacktablesDB:
         '''
         Returns the Status for a particular hostname.
         '''
-        sql = "select t2.dict_value status from AttributeValue t1 left join Dictionary t2 on t1.uint_value=t2.dict_key where t1.attr_id=10005 and t1.object_id='%s'" % hostid
+        sql = "select t2.dict_value status from AttributeValue t1 left join Dictionary t2 on t1.uint_value=t2.dict_key where t1.attr_id=10005 and t1.object_id=%s"
         try:
-            result = self.sql_query(sql)
+            result = self.sql_query(sql, (hostid))
             status = result[0]['status']
             return status
         except IndexError:
@@ -117,9 +117,9 @@ class RacktablesDB:
         ''' Returns hardware type for a specific hostname/id
         '''
         # query = self.cursor.execute("select distinct id,name, dict_value hw_type from Object t1 left join AttributeValue t2 on t1.id=t2.object_id left join TagStorage t3 on t1.id=t3.entity_id left join Dictionary t4 on t2.uint_value=t4.dict_key where t2.attr_id=2 and t1.id='%s'" % hostname)
-        sql = "select distinct id,name, dict_value hw_type from Object t1 left join AttributeValue t2 on t1.id=t2.object_id left join TagStorage t3 on t1.id=t3.entity_id left join Dictionary t4 on t2.uint_value=t4.dict_key where t2.attr_id=2 and t1.id='%s'" % hostid
+        sql = "select distinct id,name, dict_value hw_type from Object t1 left join AttributeValue t2 on t1.id=t2.object_id left join TagStorage t3 on t1.id=t3.entity_id left join Dictionary t4 on t2.uint_value=t4.dict_key where t2.attr_id=2 and t1.id=%s"
         try:
-            result = self.sql_query(sql)
+            result = self.sql_query(sql, (hostid))
             status = result[0]['hw_type']
             return status
         except IndexError:
@@ -128,9 +128,9 @@ class RacktablesDB:
     def get_host_os(self, hostid):
         ''' Returns the OS Type for a given host id
         '''
-        sql = "select t2.dict_value os_type from AttributeValue t1 left join Dictionary t2 on t1.uint_value=t2.dict_key where t1.attr_id=4 and t1.object_id='%s'" % hostid
+        sql = "select t2.dict_value os_type from AttributeValue t1 left join Dictionary t2 on t1.uint_value=t2.dict_key where t1.attr_id=4 and t1.object_id=%s"
         try:
-            result = self.sql_query(sql)
+            result = self.sql_query(sql, (hostid))
             status = result[0]['os_type']
             return status
         except IndexError:
@@ -139,9 +139,9 @@ class RacktablesDB:
     def get_host_serial_num(self, hostid):
         ''' Returns the serial number in AttributeValue table from given host id
         '''
-        sql = "select string_value from AttributeValue where object_id='%s' and attr_id=1" % hostid
+        sql = "select string_value from AttributeValue where object_id=%s and attr_id=1"
         try:
-            result = self.sql_query(sql)
+            result = self.sql_query(sql, (hostid))
             status = result[0]['string_value']
             return status
         except IndexError:
@@ -151,9 +151,9 @@ class RacktablesDB:
         '''
         Verifies whether a given serial number exists in the database
         '''
-        sql = "select * from AttributeValue where string_value='%s' and attr_id=1;" % serial_num
+        sql = "select * from AttributeValue where string_value=%s and attr_id=1"
         try:
-            result = self.sql_query(sql)
+            result = self.sql_query(sql, (serial_num))
             serial_exists = result[0]['string_value']
             return serial_exists
         except IndexError:
@@ -164,8 +164,8 @@ class RacktablesDB:
         Returns the status ID for a given string in the Dictionary.
         '''
         # Get the dict_key for the desired status
-        sql = "select dict_key from Dictionary where chapter_id=10003 and dict_value='%s'" % statusname
-        result = self.sql_query(sql)
+        sql = "select dict_key from Dictionary where chapter_id=10003 and dict_value=%s"
+        result = self.sql_query(sql, (statusname))
         try:
             status_id = result[0]['dict_key']
             return status_id
@@ -213,10 +213,10 @@ class RacktablesDB:
         Retrieves the racktables id/name for a given domain or None if not found
         '''
         if is_number(domain):
-            sql = "select dict_key, dict_value from Dictionary where chapter_id=10002 and dict_key=%s" % domain
+            sql = "select dict_key, dict_value from Dictionary where chapter_id=10002 and dict_key=%s"
         else:
-            sql = "select dict_key, dict_value from Dictionary where chapter_id=10002 and dict_value='%s'" % domain
-        result = self.sql_query(sql)
+            sql = "select dict_key, dict_value from Dictionary where chapter_id=10002 and dict_value=%s"
+        result = self.sql_query(sql, (domain))
         try:
             domain_id = result[0]['dict_key']
             return domain_id
@@ -226,8 +226,8 @@ class RacktablesDB:
     def get_host_domain(self, hostid):
         ''' Gets the host's configured domain or returns None if not set
         '''
-        sql = "select t1.object_id,t2.dict_key,t2.dict_value from AttributeValue t1 left join Dictionary t2 on t1.uint_value=t2.dict_key where t1.attr_id=10002 and object_id='%s'" % hostid
-        result = self.sql_query(sql)
+        sql = "select t1.object_id,t2.dict_key,t2.dict_value from AttributeValue t1 left join Dictionary t2 on t1.uint_value=t2.dict_key where t1.attr_id=10002 and object_id=%s"
+        result = self.sql_query(sql, (hostid))
         try:
             host_domain = result[0]['dict_value']
             return host_domain
@@ -257,8 +257,8 @@ class RacktablesDB:
         overwrite optional // NOT IMPLEMENTED YET
         '''
         # get current comments
-        sql = "select comment from RackObject where id=%s" % hostid
-        result = self.sql_query(sql)
+        sql = "select comment from RackObject where id=%s"
+        result = self.sql_query(sql, (hostid))
         try:
             comment = result[0]['comment']
         except IndexError:
@@ -267,10 +267,12 @@ class RacktablesDB:
         # update / append to comments
         if comment:
             appended_comment = comment + '\n' + comments
-            new_sql = "update RackObject set comment='%s' where id=%s" % (appended_comment, hostid)
+            new_sql = "update RackObject set comment=%s where id=%s"
+            params = (appended_comment, hostid)
         else:
-            new_sql = "update RackObject set comment='%s' where id=%s" % (comments, hostid)
-        self.cursor.execute(new_sql)
+            new_sql = "update RackObject set comment=%s where id=%s"
+            params = (comments, hostid)
+        self.cursor.execute(new_sql, params)
         self.conn.commit()
 
 
@@ -331,12 +333,12 @@ class RacktablesDB:
         if hostid == None:
             abort(410)
         else:
-            sql = ["delete from Object where id='%s'" % hostid,
-                   "delete from TagStorage where entity_id='%s'" % hostid,
-                   "delete from ObjectLog where object_id='%s'" % hostid,
-                   "delete from ObjectHistory where id='%s'" % hostid]
+            sql = ["delete from Object where id=%s",
+                   "delete from TagStorage where entity_id=%s",
+                   "delete from ObjectLog where object_id=%s",
+                   "delete from ObjectHistory where id=%s"]
             for q in sql:
-                self.cursor.execute(q)
+                self.cursor.execute(q, (hostid))
             self.conn.commit()
             result = {'data': [{'result': True}]}
             return result
@@ -346,6 +348,6 @@ class RacktablesDB:
         get host comments
         '''
         hostid = self.get_id(hostname)
-        sql = "select comment from RackObject where id=%s" % hostid
-        result = self.sql_query(sql)
+        sql = "select comment from RackObject where id=%s"
+        result = self.sql_query(sql, (hostid))
         return result[0]
