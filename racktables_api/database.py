@@ -61,22 +61,43 @@ class RacktablesDB:
         hostid = self.get_id(hostname)
         if hostid == None:
             abort(410)
-        sql = "select id, name from Object where id=%s"
-        query = self.sql_query(sql, (hostid))
-        status = self.get_host_status(hostid)
-        hwtype = self.get_host_hwtype(hostid)
-        serial_no = self.get_host_serial_num(hostid)
-        os_type = self.get_host_os(hostid)
-        domain = self.get_host_domain(hostid)
-        result = {'data': {'host': query}}
-        result['data']['host'][0]['status'] = status
-        result['data']['host'][0]['hwtype'] = hwtype
-        result['data']['host'][0]['serial_no'] = serial_no
-        result['data']['host'][0]['os'] = os_type
-        result['data']['host'][0]['domain'] = domain
-        # result['status'] = 200
-        # out.status_code = 200
-        return result
+        elif type(hostid) == int:
+            sql = "select id, name from Object where id=%s"
+            query = self.sql_query(sql, (hostid))
+            status = self.get_host_status(hostid)
+            hwtype = self.get_host_hwtype(hostid)
+            serial_no = self.get_host_serial_num(hostid)
+            os_type = self.get_host_os(hostid)
+            domain = self.get_host_domain(hostid)
+            result = {'data': {'host': query}}
+            result['data']['host'][0]['status'] = status
+            result['data']['host'][0]['hwtype'] = hwtype
+            result['data']['host'][0]['serial_no'] = serial_no
+            result['data']['host'][0]['os'] = os_type
+            result['data']['host'][0]['domain'] = domain
+            # result['status'] = 200
+            # out.status_code = 200
+            return result
+
+        elif type(hostid) == list:
+            sql = "select id, name from Object where id=%s"
+            result = {'data': {}}
+            for host in hostid:
+                query = self.sql_query(sql, (host))
+                status = self.get_host_status(host)
+                hwtype = self.get_host_hwtype(host)
+                serial_no = self.get_host_serial_num(host)
+                os_type = self.get_host_os(host)
+                domain = self.get_host_domain(host)
+                result['data'][host] = query
+                result['data'][host][0]['status'] = status
+                result['data'][host][0]['hwtype'] = hwtype
+                result['data'][host][0]['serial_no'] = serial_no
+                result['data'][host][0]['os'] = os_type
+                result['data'][host][0]['domain'] = domain
+            # result['status'] = 200
+            # out.status_code = 200
+            return result
 
     def get_all_objects(self):
         '''
@@ -93,10 +114,14 @@ class RacktablesDB:
         if is_number(hostname):
             sql = "select id from Object where id=%s"
         else:
-            sql = "select id from Object where name=%s"
+            sql = "select id from Object where name like %s"
         try:
-            result = self.sql_query(sql, (hostname))
-            return result[0]['id']
+            result = self.sql_query(sql, (hostname) + "%")
+            if len(result) == 1:
+                return result[0]['id']
+            else:
+                result = [ result[i]['id'] for i in range(len(result))]
+                return result
         except IndexError:
             #return "None" if host doesn't exist
             return None
